@@ -124,6 +124,10 @@ export PYTHONUNBUFFERED=1
 import os, sys
 model_id = '$MODEL_ID'
 model_dir = '$MODEL_DIR'
+# ModelScope snapshot_download(cache_dir=X) creates X/models/<id>/...
+# Pass parent of models/ so the model lands in MODEL_DIR/Cloudflare--clef-flash/...
+import os.path as osp
+cache_parent = osp.dirname(model_dir) if osp.basename(model_dir) == 'models' else model_dir
 
 print(f'Model will be saved to: {model_dir}')
 print(f'Model: {model_id}')
@@ -133,7 +137,7 @@ print()
 try:
     print('Trying ModelScope (faster in China)...')
     from modelscope import snapshot_download
-    path = snapshot_download(model_id, cache_dir=model_dir)
+    path = snapshot_download(model_id, cache_dir=cache_parent)
     print(f'Downloaded via ModelScope: {path}')
     sys.exit(0)
 except Exception as e:
@@ -145,7 +149,7 @@ try:
     print('Trying HuggingFace (hf-mirror.com)...')
     from huggingface_hub import snapshot_download
     os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
-    path = snapshot_download(model_id, cache_dir=os.path.join(model_dir, 'hf'))
+    path = snapshot_download(model_id, cache_dir=model_dir)
     print(f'Downloaded via HuggingFace: {path}')
 except Exception as e:
     print(f'HuggingFace also failed: {e}')
