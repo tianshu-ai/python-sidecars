@@ -120,42 +120,78 @@ mkdir -p "$MODEL_DIR"
 # Run with PYTHONUNBUFFERED so progress shows up in real time
 export PYTHONUNBUFFERED=1
 
-"$PY" -c "
-import os, sys
-model_id = '$MODEL_ID'
-model_dir = '$MODEL_DIR'
-# ModelScope snapshot_download(cache_dir=X) creates X/models/<id>/...
-# Pass parent of models/ so the model lands in MODEL_DIR/Cloudflare--clef-flash/...
-import os.path as osp
-cache_parent = osp.dirname(model_dir) if osp.basename(model_dir) == 'models' else model_dir
+export MODEL_ID="$MODEL_ID"
+export CLEF_MODEL_DIR="$MODEL_DIR"
 
-print(f'Model will be saved to: {model_dir}')
-print(f'Model: {model_id}')
+"$PY" << 'DOWNLOAD_SCRIPT' 2>&1
+import os, sys, time
+import os.path as osp
+
+model_id = os.environ.get("MODEL_ID", "Cloudflare/clef-flash")
+model_dir = os.environ.get("CLEF_MODEL_DIR", os.path.expanduser("~/.tianshu/models"))
+# ModelScope snapshot_download(cache_dir=X) creates X/models/<id>/...
+# Pass parent so the model lands directly under MODEL_DIR/
+cache_parent = osp.dirname(model_dir) if osp.basename(model_dir) == "models" else model_dir
+MAX_RETRIES = 3
+
+print(f"Model: {model_id}")
+print(f"Target: {model_dir}")
 print()
 
-# Try ModelScope first (faster in China)
-try:
-    print('Trying ModelScope (faster in China)...')
+def try_modelscope(attempt):
+    """ModelScope — faster in China. Supports resume (partial files kept)."""
+    print(f"[Attempt {attempt}/{MAX_RETRIES}] Trying ModelScope (modelscope.cn)...")
     from modelscope import snapshot_download
     path = snapshot_download(model_id, cache_dir=cache_parent)
-    print(f'Downloaded via ModelScope: {path}')
-    sys.exit(0)
-except Exception as e:
-    print(f'ModelScope failed: {e}')
-    print()
+    print(f"Downloaded via ModelScope: {path}")
+    return True
 
-# Fallback to HuggingFace
-try:
-    print('Trying HuggingFace (hf-mirror.com)...')
+def try_hf_mirror(attempt):
+    """HuggingFace via hf-mirror.com — China-accessible mirror. Supports resume."""
+    print(f"[Attempt {attempt}/{MAX_RETRIES}] Trying HuggingFace (hf-mirror.com)...")
+    os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
     from huggingface_hub import snapshot_download
-    os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
-    path = snapshot_download(model_id, cache_dir=model_dir)
-    print(f'Downloaded via HuggingFace: {path}')
-except Exception as e:
-    print(f'HuggingFace also failed: {e}')
-    print('You can download manually and set CLEF_MODEL_DIR.')
-    sys.exit(1)
-" 2>&1
+    path = snapshot_download(model_id, cache_dir=model_dir, resume_download=True)
+    print(f"Downloaded via HuggingFace mirror: {path}")
+    return True
+
+def try_hf_official(attempt):
+    """HuggingFace official — may need proxy outside China. Supports resume."""
+    print(f"[Attempt {attempt}/{MAX_RETRIES}] Trying HuggingFace (huggingface.co)...")
+    os.environ.pop("HF_ENDPOINT", None)
+    from huggingface_hub import snapshot_download
+    path = snapshot_download(model_id, cache_dir=model_dir, resume_download=True)
+    print(f"Downloaded via HuggingFace: {path}")
+    return True
+
+sources = [
+    ("ModelScope", try_modelscope),
+    ("HF-Mirror",  try_hf_mirror),
+    ("HF-Official", try_hf_official),
+]
+
+for attempt in range(1, MAX_RETRIES + 1):
+    for name, fn in sources:
+        try:
+            if fn(attempt):
+                sys.exit(0)
+        except Exception as e:
+            print(f"{name} failed: {e}")
+            print()
+    if attempt < MAX_RETRIES:
+        wait = 5 * attempt
+        print(f"All sources failed on attempt {attempt}. Retrying in {wait}s...")
+        print("(Partial downloads are preserved — next attempt resumes where it left off)")
+        print()
+        time.sleep(wait)
+
+print()
+print("All download attempts failed.")
+print("Partial files are preserved. Run Install again to resume.")
+print("Or download manually and place model files in:")
+print(f"  {model_dir}/Cloudflare--clef-flash/snapshots/master/")
+sys.exit(1)
+DOWNLOAD_SCRIPT
 
 info "Model ready"
 
