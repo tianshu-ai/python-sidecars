@@ -18,7 +18,7 @@ jobs:
           tar czf python-sidecars-${VERSION}.tar.gz \
             --exclude='.git' --exclude='.github' --exclude='__pycache__' \
             --exclude='.venv' --exclude='models' --exclude='*.pyc' \
-            decision/ tts/ README.md
+            decision/ tts/ version.json README.md
           echo "TARBALL=python-sidecars-${VERSION}.tar.gz" >> $GITHUB_ENV
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
 
