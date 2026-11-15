@@ -17,7 +17,7 @@
 set -euo pipefail
 
 VENV_DIR="${CLEF_VENV:-$HOME/.tianshu/clef-decision-venv}"
-MODEL_DIR="${CLEF_MODEL_DIR:-$HOME/.tianshu/clef-models}"
+MODEL_DIR="${CLEF_MODEL_DIR:-$HOME/.tianshu/models}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEFAULT_MODEL="clef-flash"
 PORT=8710
