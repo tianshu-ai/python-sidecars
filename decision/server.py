@@ -96,15 +96,32 @@ def main():
             try:
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length)) if length > 0 else {}
+                # Log request
+                state_preview = str(body.get("state", ""))[:80]
+                q_keys = list(body.get("questions", {}).keys())
+                criteria_keys = []
+                for q in body.get("questions", {}).values():
+                    criteria_keys.extend(list((q.get("criteria") or {}).keys()))
+                print(f"[clef] REQ state=\"{state_preview}\" questions={q_keys} criteria={criteria_keys}", flush=True)
                 t0 = time.time()
                 result = systemone(model, processor, body)
                 ms = (time.time() - t0) * 1000
                 result["_latencyMs"] = round(ms, 1)
+                # Log response
+                for qid, ans in result.get("answers", {}).items():
+                    if ans.get("type") == "choice":
+                        probs = ", ".join(f"{k}={v*100:.1f}%" for k, v in ans.get("probabilities", {}).items())
+                        print(f"[clef] RES {qid}={ans['choice']} conf={ans.get('confidence',0)*100:.1f}% [{probs}] {ms:.0f}ms", flush=True)
+                    elif ans.get("type") == "noul":
+                        print(f"[clef] RES {qid}={ans.get('probability',0)*100:.1f}% {ms:.0f}ms", flush=True)
+                    else:
+                        print(f"[clef] RES {qid}={ans} {ms:.0f}ms", flush=True)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(result, ensure_ascii=False).encode())
             except Exception as e:
+                print(f"[clef] ERR {e}", flush=True)
                 self.send_response(500)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
@@ -120,9 +137,6 @@ def main():
                 self.send_error(404)
 
         def log_message(self, format, *args):
-            # Quieter logging
-            if args and "POST /v1/systemone" in str(args[0]):
-                return  # suppress per-request logs
             super().log_message(format, *args)
 
     server = HTTPServer(("127.0.0.1", args.port), Handler)

@@ -1,94 +1,47 @@
-# Clef Sidecar
+# Python Sidecars for Tianshu
 
-Lightweight HTTP server that wraps Clef/Clef-flash decision models, exposing a Jev/SystemOne-compatible `/v1/systemone` API.
+Python HTTP 服务集合，为 [Tianshu](https://github.com/tianshu-ai/tianshu) 提供本地 AI 能力。
 
-Designed to run alongside [Tianshu](https://github.com/tianshu-ai/tianshu) as a decision model backend for the `decision` plugin.
+## 服务
 
-## Quick Start
+### decision/ — 决策模型服务
 
-```bash
-# Create venv and install dependencies
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+基于 Clef/Laya 的快速决策模型，用于 worker 路由、意图分类等。
 
-# Download model (first time only)
-python3 download_model.py
-
-# Start server
-python3 server.py --port 8710
-```
-
-## API
-
-### POST /v1/systemone
-
-Jev/SystemOne-compatible decision endpoint.
+- 端口：8710
+- API：`POST /v1/systemone`（Jev/SystemOne 兼容）
+- 模型：Clef-flash (9B) / Clef (27B) / Laya
 
 ```bash
-curl -X POST http://127.0.0.1:8710/v1/systemone \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "clef-flash",
-    "state": "帮我写一个 Python 脚本",
-    "questions": {
-      "route": {
-        "type": "choice",
-        "instructions": "Which worker should handle this?",
-        "criteria": {
-          "coder": "Code generation and debugging",
-          "researcher": "Web search and research",
-          "main": "General conversation"
-        }
-      }
-    }
-  }'
+cd decision
+bash install.sh    # 安装依赖 + 下载模型
+bash start.sh      # 前台启动
+bash start.sh --background  # 后台启动
 ```
 
-### GET /health
+### tts/ — 语音合成服务
 
-Health check endpoint.
+基于 Qwen3-TTS 的本地语音合成。
 
-## Models
+- 端口：50000
+- API：`POST /tts`
+- 后端：MLX (Apple Silicon) / PyTorch (Linux GPU/CPU)
 
-| Model | Size | Latency (MPS) | Accuracy |
-|---|---|---|---|
-| Clef-flash (9B) | ~18GB | ~220ms | Excellent |
-| Clef (27B) | ~54GB | ~500ms | Best |
-| Laya (~1B) | ~1.5GB | ~47ms | Good (70%) |
+```bash
+cd tts
+bash install.sh    # 安装依赖 + 下载模型
+bash start.sh      # 前台启动
+bash start.sh --background  # 后台启动
+```
 
-## Configuration
+## 部署
 
-| Env | Default | Description |
+每个服务独立 venv，互不影响：
+
+| 服务 | venv 路径 | 模型路径 |
 |---|---|---|
-| `CLEF_MODEL_DIR` | auto-detect | Path to model directory |
-| `CLEF_PORT` | 8710 | Server port |
-| `CLEF_DEVICE` | auto (mps > cuda > cpu) | Torch device |
-| `CLEF_MODEL` | clef-flash | Model to load |
-
-## Deployment
-
-### macOS (launchd)
-
-```bash
-# Install as a service
-cp com.tianshu.clef-sidecar.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.tianshu.clef-sidecar.plist
-```
-
-### Linux (systemd)
-
-```bash
-sudo cp clef-sidecar.service /etc/systemd/system/
-sudo systemctl enable --now clef-sidecar
-```
-
-### Docker
-
-```bash
-docker build -t clef-sidecar .
-docker run -p 8710:8710 --gpus all clef-sidecar
-```
+| decision | `~/.tianshu/clef-decision-venv` | `~/.tianshu/clef-models` |
+| tts | `~/.tianshu/qwen-tts-venv` | HuggingFace cache |
 
 ## License
 
